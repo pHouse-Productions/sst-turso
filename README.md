@@ -88,7 +88,7 @@ Savepoint names must match `[A-Za-z_][A-Za-z0-9_]*` (up to 64 characters). Strea
 
 SQLite has no boolean or date types, so by default you get back what libSQL stores: `1`/`0`, and a `Date` you wrote comes back as epoch milliseconds.
 
-**Recommended:** use SQLite-native columns (`integer` 0/1 for booleans, `integer` epoch milliseconds for times) and convert explicitly in your app's store layer, so the database's values and your types stay in plain sight.
+**Recommended:** use SQLite-native columns (`integer not null check (col in (0, 1))` for booleans; `text` holding exact `toISOString()` values for times, which matches Better Auth's SQLite format, or `integer` epoch milliseconds) and convert explicitly in your app's store layer, so the database's values and your types stay in plain sight.
 
 `convertDeclaredTypes: true` (on `createTursoKysely` or `LibsqlDialect`) is an optional alternative, not the recommended pattern. It writes records as-is and gives back real booleans and Dates, based on the column types the schema declares:
 
