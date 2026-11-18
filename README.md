@@ -49,8 +49,14 @@ Without `existing`, creating the component looks the database up by name and ado
 
 ## Setup
 
-1. Mint a Platform API token with `turso auth api-tokens mint <app>-sst`.
-2. Store it with `npx sst secret set TursoApiToken --stage <stage> < token-file`.
+1. Once, for all your apps: mint one Platform API token, scoped to the group your databases live in, and keep it in your password manager. Turso shows it only once.
+
+   ```sh
+   turso auth api-tokens mint sst --group default \
+     --scope read --scope db:create --scope db:delete --scope db:configure --scope db:mint-token
+   ```
+
+2. Per app and stage: store that same token with `npx sst secret set TursoApiToken --stage <stage> < token-file`. Don't mint a new token per app. Each one would have the same reach and would be one more thing to revoke.
 3. Run migrations with `npx sst shell --stage <stage> -- npx drizzle-kit migrate`, with `drizzle.config.ts` reading `tursoConnection()`.
 
 ## Adopting an app that already uses hand-wired Turso secrets
