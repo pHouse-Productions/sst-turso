@@ -86,7 +86,11 @@ Savepoint names must match `[A-Za-z_][A-Za-z0-9_]*` (up to 64 characters). Strea
 
 ### Booleans and Dates
 
-SQLite has no boolean or date types, so by default you get back what libSQL stores: `1`/`0`, and a `Date` you wrote comes back as epoch milliseconds. Opt in with `convertDeclaredTypes: true` (on `createTursoKysely` or `LibsqlDialect`) to write records as-is and get real booleans and Dates back:
+SQLite has no boolean or date types, so by default you get back what libSQL stores: `1`/`0`, and a `Date` you wrote comes back as epoch milliseconds.
+
+**Recommended:** use SQLite-native columns (`integer` 0/1 for booleans, `integer` epoch milliseconds for times) and convert explicitly in your app's store layer, so the database's values and your types stay in plain sight.
+
+`convertDeclaredTypes: true` (on `createTursoKysely` or `LibsqlDialect`) is an optional alternative, not the recommended pattern. It writes records as-is and gives back real booleans and Dates, based on the column types the schema declares:
 
 - **Writes:** `Date` parameters bind as UTC ISO-8601 text (`2026-11-18T09:30:00.000Z`), the format Better Auth uses. Booleans already bind as `1`/`0`.
 - **Reads:** columns declared `boolean` or `bool` map `0`/`1` to `false`/`true`. Columns declared `timestamp`, `datetime` or `date` map ISO text (SQLite's zone-less `2026-11-18 09:30:00` is read as UTC) or epoch milliseconds to a `Date`. Type names are case-insensitive, and a length suffix such as `timestamp(3)` is fine. `null` stays `null`.
