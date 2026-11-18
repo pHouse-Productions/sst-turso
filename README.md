@@ -78,6 +78,10 @@ Roll out in two deploys, so each diff stays readable:
 
 The first deploy that dynamically imports a module shows a one-time `__provider` update on SST's own dynamic resources (zone lookups, KvKeys). Preview may also mark the DNS records as "replace", but that's only because the zone ID isn't known yet; the real deploy leaves them unchanged.
 
+## Reading diffs
+
+Any change to a database's inputs, such as a new `TursoApiToken` value or a `tokenVersion` bump, makes its preview list every linked function as deleted. Pulumi can't run a dynamic resource's update during preview, so it marks all the database's outputs, including the database token, as unknown. SST only builds a function once all its linked values are known, so it skips building them, and the diff reads the skipped functions as deletions. The real deploy runs the update, which returns the token (unchanged unless `tokenVersion` changed), and the functions build normally. If the only planned change is to the database itself, those deletions are preview-only. Check `detailedDiff` with `sst diff --json` if in doubt.
+
 ## Test
 
 ```sh
