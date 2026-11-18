@@ -15,8 +15,7 @@
  *     const db = new TursoDatabase("Db", {
  *       organization: "my-org",
  *       name: `${$app.name}-${$app.stage}`,
- *       existing: $app.stage === "production", // adopt only, never create
- *     });
+ *    *     });
  *     new sst.aws.Nextjs("Web", { link: [db] }); // Resource.Db.url / .token
  *   }
  *
@@ -29,7 +28,8 @@
  *   (`turso auth api-tokens mint <name>`). It is created on first use and
  *   shared by every TursoDatabase in the app. Override it with `apiToken`.
  * - Adoption: create looks the database up by name and adopts it if it
- *   already exists, so no data is touched. With `existing: true` it only looks
+ *   already exists, so no data is touched, including databases created
+ *   before you adopted this component. With `existing: true` it only looks
  *   the database up, fails if it is missing, and never deletes it.
  * - Protection: `protect` (default: stage === "production") sets Pulumi
  *   `protect` + `retainOnDelete` and enables Turso's server-side

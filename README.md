@@ -17,7 +17,6 @@ async run() {
   const db = new TursoDatabase("Db", {
     organization: "my-org",
     name: `${$app.name}-${$app.stage}`,
-    existing: $app.stage === "production", // adopt only, never create
   });
   new sst.aws.Nextjs("Web", { link: [db] });
 }
@@ -34,16 +33,16 @@ const client = createClient({ url: url!, authToken });
 
 Use it in `drizzle.config.ts` as well, so `npx sst shell --stage <stage> -- npx drizzle-kit migrate` targets the linked database. The helper is plain JavaScript, so no `transpilePackages` setting is needed.
 
-| Option         | Default                         | Meaning                                                                                |
-| -------------- | ------------------------------- | -------------------------------------------------------------------------------------- |
-| `organization` | required                        | Turso organization slug                                                                |
-| `name`         | required                        | database name (lowercase letters, numbers, dashes; at most 64)                         |
-| `group`        | `"default"`                     | existing Turso group                                                                   |
-| `existing`     | `false`                         | only adopt an existing database: never create or delete it                             |
-| `protect`      | `stage === "production"`        | Pulumi `protect` + `retainOnDelete`, plus Turso delete protection                      |
-| `tokenVersion` | `1`                             | bump to mint a replacement database token (older tokens stay valid)                    |
-| `apiToken`     | `TursoApiToken` SST secret      | Turso Platform API token                                                               |
-| `dev`          | `{ url: "file:.local/dev.db" }` | what to link under `sst dev` (Turso is never called there); `false` uses Turso instead |
+| Option         | Default                         | Meaning                                                                                 |
+| -------------- | ------------------------------- | --------------------------------------------------------------------------------------- |
+| `organization` | required                        | Turso organization slug                                                                 |
+| `name`         | required                        | database name (lowercase letters, numbers, dashes; at most 64)                          |
+| `group`        | `"default"`                     | existing Turso group                                                                    |
+| `existing`     | `false`                         | rarely needed: fail instead of creating if the database is missing, and never delete it |
+| `protect`      | `stage === "production"`        | Pulumi `protect` + `retainOnDelete`, plus Turso delete protection                       |
+| `tokenVersion` | `1`                             | bump to mint a replacement database token (older tokens stay valid)                     |
+| `apiToken`     | `TursoApiToken` SST secret      | Turso Platform API token                                                                |
+| `dev`          | `{ url: "file:.local/dev.db" }` | what to link under `sst dev` (Turso is never called there); `false` uses Turso instead  |
 
 Without `existing`, creating the component looks the database up by name and adopts it if it already exists. A brand-new database is created, and deleted again when you remove its stage, unless it is protected.
 
@@ -73,7 +72,7 @@ Without `existing`, creating the component looks the database up by name and ado
 
 Roll out in two deploys, so each diff stays readable:
 
-1. Add `TursoDatabase` (with `existing: true` for production), but keep the app on its old secrets. The deploy adopts the database, mints its token and turns on delete protection.
+1. Add `TursoDatabase` with the database's current name, but keep the app on its old secrets. The deploy finds the database by name and adopts it, mints its token and turns on delete protection. No flag is needed.
 2. Switch the app to `link: [db]` and delete the old secrets. The token now exists, so this diff is clean.
 
 The first deploy that dynamically imports a module shows a one-time `__provider` update on SST's own dynamic resources (zone lookups, KvKeys). Preview may also mark the DNS records as "replace", but that's only because the zone ID isn't known yet; the real deploy leaves them unchanged.
