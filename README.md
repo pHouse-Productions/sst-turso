@@ -56,7 +56,17 @@ Without `existing`, creating the component looks the database up by name and ado
      --scope read --scope db:create --scope db:delete --scope db:configure --scope db:mint-token
    ```
 
-2. Per app and stage: store that same token with `npx sst secret set TursoApiToken --stage <stage> < token-file`. Don't mint a new token per app. Each one would have the same reach and would be one more thing to revoke.
+   On macOS you can keep it in the Keychain instead. Store it with `security add-generic-password -s turso-sst-api-token -a "$USER" -w` (it prompts for the value).
+
+2. Per app and stage: store that same token in the app's `TursoApiToken` secret. Don't mint a new token per app. Each one would have the same reach and would be one more thing to revoke.
+
+   ```sh
+   security find-generic-password -s turso-sst-api-token -w \
+     | npx sst secret set TursoApiToken --stage <stage>
+   ```
+
+   Without the Keychain, use `npx sst secret set TursoApiToken --stage <stage> < token-file`.
+
 3. Run migrations with `npx sst shell --stage <stage> -- npx drizzle-kit migrate`, with `drizzle.config.ts` reading `tursoConnection()`.
 
 ## Adopting an app that already uses hand-wired Turso secrets
