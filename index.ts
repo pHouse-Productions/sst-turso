@@ -15,7 +15,7 @@
  *     const db = new TursoDatabase("Db", {
  *       organization: "my-org",
  *       name: `${$app.name}-${$app.stage}`,
- *    *     });
+ *     });
  *     new sst.aws.Nextjs("Web", { link: [db] }); // Resource.Db.url / .token
  *   }
  *
