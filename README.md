@@ -5,7 +5,7 @@
 ## Install
 
 ```sh
-npm i github:pHouse-Productions/sst-turso#v0.2.0 # a regular dependency: the runtime helper ships in your server bundle
+npm i github:pHouse-Productions/sst-turso#v0.3.0 # a regular dependency: the runtime helper ships in your server bundle
 ```
 
 ## Use
@@ -45,6 +45,44 @@ Use it in `drizzle.config.ts` as well, so `npx sst shell --stage <stage> -- npx 
 | `dev`          | `{ url: "file:.local/dev.db" }` | what to link under `sst dev` (Turso is never called there); `false` uses Turso instead  |
 
 Without `existing`, creating the component looks the database up by name and adopts it if it already exists. A brand-new database is created, and deleted again when you remove its stage, unless it is protected.
+
+## Kysely
+
+`sst-turso/kysely` gives every app the same tested Kysely ↔ libSQL setup. Install the optional peers first: `npm i kysely @libsql/client`.
+
+```ts
+import { createTursoKysely } from "sst-turso/kysely";
+import type { DB } from "./db.generated";
+
+export const db = createTursoKysely<DB>({
+  production: isProductionStage, // your own flag: require a libsql:// URL and token, or throw
+  // link: "Db", urlEnv/tokenEnv/env: same as tursoConnection(); plugins: optional Kysely plugins
+});
+```
+
+It reads `tursoConnection()`. Remote URLs use `@libsql/client/web`. `file:`, `:memory:` and loopback URLs (`turso dev`) use the native `@libsql/client`, which is required lazily, so deployed code never loads it. With `production: true`, anything but a `libsql://` URL with a token throws.
+
+For your own client, use the dialect directly: `new Kysely<DB>({ dialect: new LibsqlDialect(client) })`. `db.destroy()` closes the client by default, since the dialect usually owns it. Pass `{ closeOnDestroy: false }` when something else shares the client.
+
+**Why not `@libsql/kysely-libsql`?** It imports the default `@libsql/client` entry, which loads a native SQLite binary that isn't in the Lambda (OpenNext) bundle, and it pins `@libsql/client` to `^0.8`. This module statically imports only `@libsql/client/web`, a pure HTTP client, and a test enforces that. The `sst-turso` component and `sst-turso/runtime` never import Kysely or libSQL.
+
+Transactions and savepoints work as usual:
+
+```ts
+await db.transaction().execute(async (trx) => { /* commit, or roll back on throw */ });
+
+const trx = await db.startTransaction().execute();
+const sp = await trx.savepoint("before_import").execute();
+try {
+  await sp.insertInto("item").values(rows).execute();
+  await sp.releaseSavepoint("before_import").execute();
+} catch {
+  await sp.rollbackToSavepoint("before_import").execute(); // keeps the outer work
+}
+await trx.commit().execute();
+```
+
+Savepoint names must match `[A-Za-z_][A-Za-z0-9_]*` (up to 64 characters). Streaming isn't supported.
 
 ## Setup
 

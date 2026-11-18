@@ -1,0 +1,14 @@
+{
+  // Typechecks the hand-written declarations and the tests that use them.
+  // index.ts needs SST's generated globals, so SST's own bundler checks it.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "types": ["node"]
+  },
+  "include": ["*.d.ts", "tests/kysely.test.ts", "tests/runtime.test.ts"]
+}
