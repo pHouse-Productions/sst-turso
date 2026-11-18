@@ -10,5 +10,5 @@
     "skipLibCheck": false,
     "types": ["node"]
   },
-  "include": ["*.d.ts", "tests/kysely.test.ts", "tests/runtime.test.ts"]
+  "include": ["*.d.ts", "tests/kysely.test.ts", "tests/kysely-sqld.test.ts", "tests/runtime.test.ts"]
 }

@@ -7,6 +7,7 @@ import { createClient } from "@libsql/client";
 import { CamelCasePlugin, type Kysely, sql } from "kysely";
 import {
   createTursoKysely,
+  declaredTypeConverter,
   isLocalLibsqlUrl,
   LibsqlDialect,
 } from "../kysely.js";
@@ -228,6 +229,182 @@ describe("createTursoKysely", () => {
     );
     expect(raw.rows).toEqual([{ item_name: "x" }]);
     await camel.destroy();
+  });
+});
+
+describe("convertDeclaredTypes", () => {
+  interface TypedDB {
+    session: {
+      id: number | null;
+      active: boolean | null;
+      createdAt: Date | null;
+      expiresAt: Date | null;
+      note: string | null;
+    };
+  }
+  const create = async (target: Kysely<TypedDB>) =>
+    target.schema
+      .createTable("session")
+      .addColumn("id", "integer", (c) => c.primaryKey())
+      .addColumn("active", sql`BOOLEAN`)
+      .addColumn("createdAt", sql`DateTime`)
+      .addColumn("expiresAt", sql`timestamp(3)`)
+      .addColumn("note", "text")
+      .execute();
+  const createdAt = new Date("2026-11-18T09:30:00.123Z");
+
+  it("round-trips Dates and booleans", async () => {
+    const typed = createTursoKysely<TypedDB>({
+      env: { TURSO_DATABASE_URL: url },
+      convertDeclaredTypes: true,
+    });
+    await create(typed);
+    const returned = await typed
+      .insertInto("session")
+      .values({ active: true, createdAt, expiresAt: null, note: "1" })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+    expect(returned).toEqual({
+      id: 1,
+      active: true,
+      createdAt,
+      expiresAt: null,
+      note: "1",
+    });
+    await typed.transaction().execute((trx) =>
+      trx
+        .insertInto("session")
+        .values({ active: false, createdAt, expiresAt: createdAt, note: null })
+        .execute(),
+    );
+    const rows = await typed
+      .selectFrom("session")
+      .selectAll()
+      .where("createdAt", "=", createdAt) // Date parameters bind as ISO text
+      .orderBy("id")
+      .execute();
+    expect(rows.map((r) => [r.active, r.createdAt, r.expiresAt])).toEqual([
+      [true, createdAt, null],
+      [false, createdAt, createdAt],
+    ]);
+    expect(rows[1].createdAt).toBeInstanceOf(Date);
+
+    // Stored as ISO text (read through the unconverted instance).
+    const stored = await sql<{ t: string; v: string }>`
+      select typeof(createdAt) t, createdAt v from session limit 1`.execute(db);
+    expect(stored.rows).toEqual([{ t: "text", v: createdAt.toISOString() }]);
+    // Expressions have no declared type and pass through.
+    const raw = await sql<{ n: number; latest: string }>`
+      select count(*) n, max(createdAt) latest from session`.execute(typed);
+    expect(raw.rows).toEqual([{ n: 2, latest: createdAt.toISOString() }]);
+    const counted = await typed
+      .selectFrom("session")
+      .select((eb) => eb.fn.countAll<number>().as("n"))
+      .executeTakeFirstOrThrow();
+    expect(counted).toEqual({ n: 2 });
+    await typed.destroy();
+  });
+
+  it("reads epoch milliseconds and SQLite datetime text as Dates", async () => {
+    const typed = createTursoKysely<TypedDB>({
+      env: { TURSO_DATABASE_URL: url },
+      convertDeclaredTypes: true,
+    });
+    await create(typed);
+    await sql`insert into session (active, createdAt, expiresAt) values
+      (1, ${createdAt.getTime()}, '2026-11-18 09:30:00')`.execute(typed);
+    expect(
+      await typed
+        .selectFrom("session")
+        .select(["createdAt", "expiresAt"])
+        .executeTakeFirstOrThrow(),
+    ).toEqual({ createdAt, expiresAt: new Date("2026-11-18T09:30:00Z") });
+    await typed.destroy();
+  });
+
+  it("leaves values alone when off", async () => {
+    const plain = db as unknown as Kysely<TypedDB>;
+    await create(plain);
+    await plain
+      .insertInto("session")
+      .values({ active: true, createdAt, expiresAt: null, note: null })
+      .execute();
+    expect(
+      await plain
+        .selectFrom("session")
+        .select(["active", "createdAt"])
+        .executeTakeFirstOrThrow(),
+    ).toEqual({ active: 1, createdAt: createdAt.getTime() });
+  });
+
+  it("matches declared type names case-insensitively", () => {
+    const toBool = declaredTypeConverter("BOOLEAN")!;
+    const toDate = declaredTypeConverter("DateTime")!;
+    for (const t of ["boolean", "Bool", " BOOL "])
+      expect(declaredTypeConverter(t)).toBe(toBool);
+    for (const t of ["timestamp", "TIMESTAMP(3)", "date", "Datetime"])
+      expect(declaredTypeConverter(t)).toBe(toDate);
+    for (const t of ["", "text", "integer", "booleans", "timestamptz", null])
+      expect(declaredTypeConverter(t)).toBeUndefined();
+
+    expect([toBool(0), toBool(1), toBool(1n), toBool(2), toBool("x")]).toEqual(
+      [false, true, true, 2, "x"],
+    );
+    const at = new Date("2026-11-18T04:00:00Z");
+    for (const v of [
+      "2026-11-18T04:00:00Z",
+      "2026-11-18 04:00:00",
+      "2026-11-18T09:30:00+05:30",
+      "2026-11-18T09:30:00+0530",
+      at.getTime(),
+      BigInt(at.getTime()),
+    ])
+      expect(toDate(v)).toEqual(at);
+    expect(toDate("2026-11-18")).toEqual(new Date("2026-11-18T00:00:00Z"));
+    expect(toDate("not a date")).toBe("not a date");
+  });
+
+  it("converts remote (web client) results using their declared types", async () => {
+    const at = createdAt.toISOString();
+    webClient.execute
+      .mockReset()
+      .mockResolvedValueOnce({ columns: ["type"], columnTypes: ["TEXT"], rows: [], rowsAffected: 0 })
+      .mockResolvedValueOnce({
+        columns: ["active", "createdAt", "n"],
+        columnTypes: ["BOOLEAN", "DATETIME", ""],
+        rows: [[1, at, 3]],
+        rowsAffected: 0,
+      });
+    const remote = createTursoKysely<TypedDB>({
+      env: { TURSO_DATABASE_URL: "libsql://app-org.turso.io", TURSO_AUTH_TOKEN: "jwt" },
+      convertDeclaredTypes: true,
+    });
+    const rows = await remote
+      .selectFrom("session")
+      .select(["active", "createdAt"])
+      .where("createdAt", ">", createdAt)
+      .execute();
+    expect(rows).toEqual([{ active: true, createdAt, n: 3 }]);
+    expect(webClient.execute).toHaveBeenCalledTimes(2);
+    expect(webClient.execute.mock.calls[1][0].args).toEqual([at]);
+  });
+
+  it("fails clearly when the remote reports no declared types", async () => {
+    webClient.execute
+      .mockReset()
+      .mockResolvedValue({ columns: ["type"], columnTypes: [""], rows: [], rowsAffected: 0 });
+    const remote = createTursoKysely<TypedDB>({
+      env: { TURSO_DATABASE_URL: "libsql://app-org.turso.io", TURSO_AUTH_TOKEN: "jwt" },
+      convertDeclaredTypes: true,
+    });
+    const query = () => remote.selectFrom("session").selectAll().execute();
+    await expect(query()).rejects.toThrow(/does not report them/);
+    // A result without columnTypes fails too, rather than skipping conversion.
+    webClient.execute
+      .mockReset()
+      .mockResolvedValueOnce({ columns: ["type"], columnTypes: ["TEXT"], rows: [], rowsAffected: 0 })
+      .mockResolvedValueOnce({ columns: ["active"], rows: [[1]], rowsAffected: 0 });
+    await expect(query()).rejects.toThrow(/does not report them/);
   });
 });
 

@@ -5,7 +5,7 @@
 ## Install
 
 ```sh
-npm i github:pHouse-Productions/sst-turso#v0.3.0 # a regular dependency: the runtime helper ships in your server bundle
+npm i github:pHouse-Productions/sst-turso#v0.4.0 # a regular dependency: the runtime helper ships in your server bundle
 ```
 
 ## Use
@@ -83,6 +83,15 @@ await trx.commit().execute();
 ```
 
 Savepoint names must match `[A-Za-z_][A-Za-z0-9_]*` (up to 64 characters). Streaming isn't supported.
+
+### Booleans and Dates
+
+SQLite has no boolean or date types, so by default you get back what libSQL stores: `1`/`0`, and a `Date` you wrote comes back as epoch milliseconds. Opt in with `convertDeclaredTypes: true` (on `createTursoKysely` or `LibsqlDialect`) to write records as-is and get real booleans and Dates back:
+
+- **Writes:** `Date` parameters bind as UTC ISO-8601 text (`2026-11-18T09:30:00.000Z`), the format Better Auth uses. Booleans already bind as `1`/`0`.
+- **Reads:** columns declared `boolean` or `bool` map `0`/`1` to `false`/`true`. Columns declared `timestamp`, `datetime` or `date` map ISO text (SQLite's zone-less `2026-11-18 09:30:00` is read as UTC) or epoch milliseconds to a `Date`. Type names are case-insensitive, and a length suffix such as `timestamp(3)` is fine. `null` stays `null`.
+
+This works from the column types your schema declares, which libSQL reports with each result (`ResultSet.columnTypes`, Hrana `decltype`). So the schema must declare them: `createdAt datetime`, not `createdAt text`. Values that only come from expressions, such as `count(*)`, `max(createdAt)` or `cast(...)`, have no declared type and pass through unchanged. Selecting a column directly, even under an alias, keeps its type. The option checks once, on the first query, that the server reports declared types (one extra `select` per client), and fails clearly if it doesn't, rather than silently doing nothing. Local `file:` databases and `sqld`/`turso dev` report them (tested with sqld 0.24), and Turso runs sqld.
 
 ## Setup
 
