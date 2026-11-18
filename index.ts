@@ -6,7 +6,7 @@
  * community ones: celest-dev, which is archived and whose Pulumi package is
  * deprecated, and jpedroh, which had seen no activity for a year.)
  *
- * Install: npm i github:pHouse-Productions/sst-turso#v0.1.0
+ * Install: npm i github:pHouse-Productions/sst-turso#v0.2.0
  *
  * Usage (sst.config.ts):
  *

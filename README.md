@@ -5,7 +5,7 @@
 ## Install
 
 ```sh
-npm i github:pHouse-Productions/sst-turso#v0.1.0
+npm i github:pHouse-Productions/sst-turso#v0.2.0 # a regular dependency: the runtime helper ships in your server bundle
 ```
 
 ## Use
@@ -23,7 +23,16 @@ async run() {
 }
 ```
 
-At runtime, read `Resource.Db.url` and `Resource.Db.token` (`import { Resource } from "sst/resource"`).
+At runtime, connect with the helper. It returns the linked `Resource.Db` when there is one (deployed stages, `sst dev`, `sst shell`), and otherwise falls back to `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`, for plain local dev, scripts and tests:
+
+```ts
+import { tursoConnection } from "sst-turso/runtime";
+
+const { url, authToken } = tursoConnection(); // or tursoConnection("OtherDb", { urlEnv: "OTHER_URL" })
+const client = createClient({ url: url!, authToken });
+```
+
+Use it in `drizzle.config.ts` as well, so `npx sst shell --stage <stage> -- npx drizzle-kit migrate` targets the linked database. The helper is plain JavaScript, so no `transpilePackages` setting is needed.
 
 | Option         | Default                         | Meaning                                                                                |
 | -------------- | ------------------------------- | -------------------------------------------------------------------------------------- |
@@ -42,7 +51,7 @@ Without `existing`, creating the component looks the database up by name and ado
 
 1. Mint a Platform API token with `turso auth api-tokens mint <app>-sst`.
 2. Store it with `npx sst secret set TursoApiToken --stage <stage> < token-file`.
-3. Run migrations with `npx sst shell --stage <stage> -- npx drizzle-kit migrate`, with `drizzle.config.ts` using `Resource.Db` when it is linked and falling back to env vars when it isn't.
+3. Run migrations with `npx sst shell --stage <stage> -- npx drizzle-kit migrate`, with `drizzle.config.ts` reading `tursoConnection()`.
 
 ## Adopting an app that already uses hand-wired Turso secrets
 

@@ -1,14 +1,20 @@
 {
   "name": "sst-turso",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "SST component for Turso (libSQL) databases, built on the Turso Platform API.",
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./runtime": {
+      "types": "./runtime.d.ts",
+      "default": "./runtime.js"
+    }
   },
   "types": "./index.ts",
   "files": [
     "index.ts",
+    "runtime.js",
+    "runtime.d.ts",
     "README.md",
     "LICENSE"
   ],
